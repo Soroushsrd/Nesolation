@@ -515,3 +515,585 @@ uint8_t Cpu::ASL() {
   }
   return 0;
 }
+
+// Instruction: Branch if carry clear
+// if (C == 0) pc = address
+uint8_t Cpu::BCC() {
+  if (GetFlag(C) == 0) {
+    // we're gonna branch, so we need an extra cycle
+    cycles++;
+
+    // calculating where to jump to:
+    // where are are (pc) + rel offset
+    address_abs = pc + address_rel;
+
+    // check if we crossed a page boundary
+    // A "page" in 6502 is 256 bytes (one full high byte)
+    // 0xFF00 = 1111111100000000 - masks the high byte (page number)
+    // to cross a page boundary, we need another cycle!
+    if ((address_abs & 0xFF00) != (pc & 0xFF00))
+      cycles++;
+
+    // jumping. jump dude
+    pc = address_abs;
+  }
+  // since we alaredy added the cycles inside the code, we wont need to return anything
+
+  return 0;
+}
+
+// Instruction: Branch if carry set
+// if (C==1) pc = address
+uint8_t Cpu::BCS() {
+  if (GetFlag(C) == 1) {
+    cycles++;
+    address_abs = pc + address_rel;
+
+    if ((address_abs & 0xFF00) != (pc & 0xFF00)) {
+      cycles++;
+    }
+
+    pc = address_abs;
+  }
+
+  return 0;
+}
+
+// Instruction: Branch if equal
+// if (Z==1) pc = address
+//
+// the zero flag gets set when the result of our LAST op was zero.
+// "Equal" mean the last comparison resulted in zero (A-M=0 thus A=M)
+uint8_t Cpu::BEQ() {
+  if (GetFlag(Z) == 1) {
+    cycles++;
+
+    address_abs = pc + address_rel;
+    if ((address_abs & 0xFF00) != (pc & 0xFF00)) {
+      cycles++;
+    }
+    pc = address_abs;
+  }
+  return 0;
+}
+
+// Instruction: BIT test
+// This instruction tests bits in memory against the accumulator
+// It's unusual because it sets flags based on BOTH the AND result AND the original memory value
+// flags out: Z, N,V
+// N and V are set in bit 7 and 6 respectively!
+uint8_t Cpu::BIT() {
+  // getting the value from memory
+  fetch();
+  // performing the AND which tests which bits are set in both A and memory
+  temp = a & fetch();
+
+  // Set Zero flag based on the AND result
+  //  Z = 1 if A AND memory equals zero (no common bits set)
+  //  This tells you if A and memory have NO bits in common
+  SetFlag(Z, (temp & 0x00FF) == 0x00);
+  // sets the Negative flag from the 7th bith of the original fetched value
+  // N = 1 means bit 7 of memory is set ( memory >= 128)
+  // N=0 means bit 7 of memory is not set (memory < 128)
+  SetFlag(N, fetched & (1 << 7));
+
+  SetFlag(V, fetched & (1 << 6));
+
+  return 0;
+}
+
+// Instruction: Branch if negative
+// if (N==1) pc = address
+//
+uint8_t Cpu::BMI() {
+  if (GetFlag(N) == 1) {
+    cycles++;
+
+    address_abs = pc + address_rel;
+
+    if ((address_abs & 0xFF00) != (pc & 0xFF00)) {
+      cycles++;
+    }
+
+    pc = address_abs;
+  }
+
+  return 0;
+}
+
+// Instruction: Branch if not equal
+uint8_t Cpu::BNE() {
+  if (GetFlag(Z) == 0) {
+    cycles++;
+
+    address_abs = pc + address_rel;
+
+    if ((address_abs & 0xFF00) != (pc & 0xFF00)) {
+      cycles++;
+    }
+
+    pc = address_abs;
+  }
+  return 0;
+}
+
+// Instruction, Branch if positive
+uint8_t Cpu::BPL() {
+  if (GetFlag(N) == 0) {
+    cycles++;
+
+    address_abs = pc + address_rel;
+
+    if ((address_abs & 0xFF00) != (pc & 0xFF00)) {
+      cycles++;
+    }
+
+    pc = address_abs;
+  }
+
+  return 0;
+}
+
+// Instruction: Break
+//  This forces the CPU into an interrupt state, like a software-triggered interrupt
+// Used for debugging, system calls, or error handling
+uint8_t Cpu::BRK() {
+  pc++;
+
+  // disable further interrupts
+  SetFlag(I, 1);
+  // save program counter on the stack
+  // stack grows downwards and we need to save 16bit pc as 8bit values
+  write(0x0100 + stkp, (pc >> 8) & 0x00FF);
+
+  // moving down the stack
+  stkp--;
+
+  // setting B to 1 indicates that this is a BRK intrrupt and not a hardware one
+  SetFlag(B, 1);
+  // saving status register on the stack
+  write(0x0100 + stkp, status);
+  stkp--;
+
+  // clearning the B flag. the B flag is only set in the copy that was saved on the
+  // stack. actual status register value should have B cleared
+  SetFlag(B, 0);
+
+  // jumping to interrupt handler
+  // The interrupt vector is stored at memory addresses 0xFFFE and 0xFFFF
+  // 0xFFFE = low byte of handler address
+  // 0xFFFF = high byte of handler address
+  // We read both bytes and combine them into a 16-bit address
+  pc = (uint16_t) read(0xFFFE) | ((uint16_t) read(0xFFFF) << 8);
+  return 0;
+}
+
+// instruction: Branch if overflow clear
+// if (V==0) pc = address
+uint8_t Cpu::BVS() {
+  if (GetFlag(V) == 0) {
+    cycles++;
+
+    address_abs = pc + address_rel;
+
+    if ((address_abs & 0xFF00) != (pc & 0xFF00)) {
+      cycles++;
+    }
+
+    pc = address_abs;
+  }
+
+  return 0;
+}
+
+// Instruction: Clear carry flag
+//  c= 0
+uint8_t Cpu::CLC() {
+  SetFlag(C, false);
+  return 0;
+}
+
+// Instruction: Clear Decimal Flag
+// D=0
+uint8_t Cpu::CLD() {
+  SetFlag(D, false);
+  return 0;
+}
+
+// Instruction: Disable interrupts
+// I=0
+uint8_t Cpu::CLI() {
+  SetFlag(I, false);
+  return 0;
+}
+
+// Instruction: clear overflow flag
+// v=0
+uint8_t Cpu::CLV() {
+  SetFlag(V, false);
+  return 0;
+}
+
+// instruction: compare accumulator
+// C <- A >=M  z<- (A-M) == 0
+// flags out N, C, Z
+uint8_t Cpu::CMP() {
+  fetch();
+  temp = (uint16_t) a - (uint16_t) fetched;
+
+  SetFlag(C, a >= fetched);
+  SetFlag(Z, (temp & 0x00FF) == 0x0000);
+  SetFlag(N, temp & 0x0080);
+
+  return 1;
+}
+
+// Instruction Compare X register
+//  C<- X >= M   z<- (X-M) == 0
+//  flags out : N,C,Z
+uint8_t Cpu::CPX() {
+  fetch();
+  temp = (uint16_t) x - (uint16_t) fetched;
+
+  SetFlag(C, x >= fetched);
+  SetFlag(Z, (temp & 0x00FF) == 0x0000);
+  SetFlag(N, temp & 0x0080);
+  return 0;
+}
+
+// Instruction: Compare Y register
+// c <- Y >= M   z<- (Y-M)==0
+// flags out N, C, Z
+uint8_t Cpu::CPY() {
+  fetch();
+  temp = (uint16_t) y - (uint16_t) fetched;
+
+  SetFlag(C, y >= fetched);
+  SetFlag(Z, (temp & 0x00FF) == 0x0000);
+  SetFlag(N, temp & 0x0080);
+  return 0;
+}
+
+// Instruction: decrement value at memory location
+// M = M -1
+// flags out: N,Z
+uint8_t Cpu::DEC() {
+  fetch();
+  temp = fetched - 1;
+
+  write(address_abs, temp & 0x00FF);
+
+  SetFlag(N, temp & 0x0080);
+  SetFlag(Z, (temp & 0x00FF) == 0x0000);
+  return 0;
+}
+
+// Instruction: decrement X register
+// X = X -1;
+// flags out: N, Z
+uint8_t Cpu::DEX() {
+
+  x--;
+
+  SetFlag(N, x & 0x80);
+  SetFlag(Z, x == 0x00);
+  return 0;
+}
+
+// Instruction: decrement Y register
+// Y = Y -1;
+// flags out: N, Z
+uint8_t Cpu::DEY() {
+
+  y--;
+
+  SetFlag(N, y & 0x80);
+  SetFlag(Z, y == 0x00);
+  return 0;
+}
+
+// Instruction: Bitwise logic XOR
+// A = A XOR M;
+// flags out: N, Z
+uint8_t Cpu::EOR() {
+
+  fetch();
+  a = a ^ fetched;
+  SetFlag(N, a & 0x80);
+  SetFlag(Z, a == 0x00);
+  return 0;
+}
+
+// Instruction: increment value at memory location
+// M = M +1
+// flags out: N,Z
+uint8_t Cpu::INC() {
+  fetch();
+  temp = fetched + 1;
+
+  write(address_abs, temp & 0x00FF);
+
+  SetFlag(N, temp & 0x0080);
+  SetFlag(Z, (temp & 0x00FF) == 0x0000);
+  return 0;
+}
+
+// Instruction: increment X register
+// x = x +1;
+// flags out: N, Z
+uint8_t Cpu::INX() {
+
+  x++;
+
+  SetFlag(N, y & 0x80);
+  SetFlag(Z, y == 0x00);
+  return 0;
+}
+// Instruction: increment Y register
+// Y = Y +1;
+// flags out: N, Z
+uint8_t Cpu::INY() {
+
+  y++;
+
+  SetFlag(N, y & 0x80);
+  SetFlag(Z, y == 0x00);
+  return 0;
+}
+
+// instruction: jump to location
+// pc = address
+uint8_t Cpu::JMP() {
+  pc = address_abs;
+  return 0;
+}
+
+// Instruction: Jump to sub routine
+// function: push current pc to stack, pc = address
+// This is like a function call. it jumps to a new location but saves where to return to
+// The target address was already calculated by the addressing mode (usually ABS)
+uint8_t Cpu::JSR() {
+  // Adjust PC to point to the last byte of the JSR instruction
+  // JSR is a 3-byte instruction: JSR + low byte + high byte
+  // When we get here, PC is already pointing to the byte AFTER JSR (auto-incremented)
+  // But we want to save the address of the LAST byte of JSR, so we decrement by 1
+  pc--;
+
+  // Save the return address on the stack
+  // we save PC so RTS (Return from Subroutine) knows where to come back to
+  // save high byte of PC to stack
+  // (pc >> 8) shifts right 8 bits to get the high byte
+  write(0x0100 + stkp, (pc >> 8) & 0x00FF);
+  stkp--;
+  // saving low byte of the pc to stack
+  write(0x0100 + stkp, pc & 0x00FF);
+  stkp--;
+  // jump to subroutine
+  pc = address_abs;
+  return 0;
+}
+
+// Instruction: Load the accumulator
+// A = M
+// flags out: N, Z
+uint8_t Cpu::LDA() {
+  fetch();
+  a = fetched;
+
+  SetFlag(N, a == 0x80);
+  SetFlag(Z, a == 0x00);
+  return 1;
+}
+
+// Instruction: Load the X register
+// X = M
+// flags out: N, Z
+uint8_t Cpu::LDX() {
+  fetch();
+  x = fetched;
+
+  SetFlag(N, x == 0x80);
+  SetFlag(Z, x == 0x00);
+  return 1;
+}
+
+// Instruction: Load the Y register
+// y = M
+// flags out: N, Z
+uint8_t Cpu::LDY() {
+  fetch();
+  y = fetched;
+
+  SetFlag(N, y == 0x80);
+  SetFlag(Z, y == 0x00);
+  return 1;
+}
+
+// Instruction: Logical shift right
+// shifts all bits one position to the right
+// eq to dividing by 2 for unsigned numbers
+// flags out: C,Z,N
+uint8_t Cpu::LSR() {
+  fetch();
+  // setting carry flag to the bit that gets shifted out!
+  // When we shift right, bit 0(rightmost bit) gets pushed out
+  // 0x0001 = 00000001 - checks only bit 0
+  // This bit becomes the new carry flag
+  SetFlag(C, fetched & 0x0001);
+
+  temp = fetched >> 1;
+  // 0x00FF makes sure we are only looking at 8 bits!
+  SetFlag(Z, (temp & 0x00FF) == 0x0000);
+  // checking bit 7
+  SetFlag(N, temp & 0x0080);
+
+  // storing the result
+  // LSR can either work on accumulator or memory location
+  if (lookup[opcode].addrmode == &Cpu::IMP) {
+    a = temp & 0x00FF;
+  } else {
+    write(address_abs, temp & 0x00FF);
+  }
+  return 0;
+}
+
+uint8_t Cpu::NOP() {
+  switch (opcode) {
+    case 0x1C:
+    case 0x3C:
+    case 0x5C:
+    case 0x7C:
+    case 0xDC:
+    case 0xFC:
+      return 1;
+      break;
+  }
+  return 0;
+}
+
+// Instruction: Bitwise Logic OR
+// A = A | M
+// flagsout : N,Z
+uint8_t Cpu::ORA() {
+  fetch();
+
+  a |= fetched;
+
+  SetFlag(N, a & 0x80);
+  SetFlag(Z, a & 0x00);
+
+  return 1;
+}
+
+// Instruction: Push accumulator to stack
+// A -> Stack
+uint8_t Cpu::PHA() {
+  write(0x0100 + stkp, a);
+  stkp--;
+  return 0;
+}
+
+// Instruction: Push status register to stack
+// S -> Stack
+// bnreak flag is set to 1 before pushing
+uint8_t Cpu::PHP() {
+  write(0x0100 + stkp, status | B | U);
+  SetFlag(B, 0);
+  SetFlag(U, 0);
+  stkp--;
+  return 0;
+}
+
+// Instruction: Pop accumulator off the stack
+// flags out : N,Z
+uint8_t Cpu::PLA() {
+  stkp++;
+  a = read(0x0100 + stkp);
+  SetFlag(N, a & 0x80);
+  SetFlag(Z, a & 0x00);
+  return 1;
+}
+
+// instruction: pop status off the stack
+uint8_t Cpu::PLP() {
+  stkp++;
+  status = read(0x0100 + stkp);
+  SetFlag(U, 1);
+  return 0;
+}
+
+// Instruction: Rotation left
+// This shifts all bits left by one position, but the carry flag becomes bit 0
+// and the original bit 7 becomes the new carry flag
+// It's like a 9-bit rotation including the carry flag!
+uint8_t Cpu::ROL() {
+  fetch();
+
+  // shift left and insert the carry flag at 0 bit
+  temp = (uint16_t) (fetched << 1) | GetFlag(C);
+  // Set new carry flag from the bit that got shifted out
+  //  If bit 7 was set before shifting, temp will be > 255 (bit 8 set)
+  //  0xFF00 = 1111111100000000 checks if any high bits are set
+  SetFlag(C, temp & 0xFF00);
+  SetFlag(Z, (temp & 0x00FF) == 0x00000);
+  SetFlag(N, temp & 0x0080);
+
+  if (lookup[opcode].addrmode == &Cpu::IMP) {
+    a = temp & 0x00FF;
+  } else {
+    write(address_abs, temp & 0x00FF);
+  }
+
+  return 0;
+}
+
+// Instruction: Rotate Right
+uint8_t Cpu::ROR() {
+  fetch();
+  temp = (uint16_t) (GetFlag(C) << 7) | (fetched >> 1);
+  SetFlag(C, fetched & 0x01);
+  SetFlag(Z, (temp & 0x00FF) == 0x00);
+  SetFlag(N, temp & 0x0080);
+  if (lookup[opcode].addrmode == &Cpu::IMP) {
+    a = temp & 0x00FF;
+  } else {
+    write(address_abs, temp & 0x00FF);
+  }
+  return 0;
+}
+
+// Instruction: Return from interrupt
+//  this one undones what BRK, IRQ and NMI do. restores the complete CPU state
+uint8_t Cpu::RTI() {
+  stkp++; // going backwards
+
+  status = read(0x0100 + stkp);
+
+  // clearing B and U flags in the restored status
+  // ~B flips all bits of B, then & clears those bits in status
+  // B flag should never actually be set in the running status register
+  // U flag should always be 1 during normal operation, but we clear it here
+  status &= ~B;
+  status &= ~U;
+
+  stkp++;
+  // high byte of pc + low byte
+  pc = pc | (uint16_t) read(0x0100 + stkp) << 8;
+  return 0;
+}
+
+// Insntruction: return from subroutine
+uint8_t Cpu::RTS() {
+  stkp++;
+  // getting the low byte of pc
+  pc = (uint16_t) read(0x0100 + stkp);
+  stkp++;
+  // getting the high byte of pc and combining them!
+  pc |= (uint16_t) read(0x0100 + stkp) << 8;
+
+  pc++;
+  // Move to the next instruction
+  // JSR saves the address of the LAST BYTE of the JSR instruction
+  // So we need to increment to get to the instruction AFTER JSR
+  return 0;
+}
