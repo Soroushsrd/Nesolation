@@ -1097,3 +1097,86 @@ uint8_t Cpu::RTS() {
   // So we need to increment to get to the instruction AFTER JSR
   return 0;
 }
+
+// Instruction: Set carry flag
+uint8_t Cpu::SEC() {
+  SetFlag(C, true);
+  return 0;
+}
+
+// Instruction: Set decimal flag
+uint8_t Cpu::SED() {
+  SetFlag(D, true);
+  return 0;
+}
+// Instruction: Set interrupt flag
+uint8_t Cpu::SEI() {
+  SetFlag(I, true);
+  return 0;
+}
+// Instruction: Store accumulator at address
+uint8_t Cpu::STA() {
+  write(address_abs, a);
+  return 0;
+}
+
+// Instruction: Store X register at address
+uint8_t Cpu::STX() {
+  write(address_abs, x);
+  return 0;
+}
+
+// Instruction: Store y register at address
+uint8_t Cpu::STY() {
+  write(address_abs, y);
+  return 0;
+}
+
+// Instruction: transfer accumulator to x register
+// x = a
+// flagsout: N,Z
+uint8_t Cpu::TAX() {
+  x = a;
+  SetFlag(Z, x == 0x00);
+  SetFlag(N, x & 0x80);
+  return 0;
+}
+
+// Instruction: transfer stack ptr to x register
+// x = stkp
+// flagsout: N,Z
+uint8_t Cpu::TSX() {
+  x = stkp;
+  SetFlag(Z, x == 0x00);
+  SetFlag(N, x & 0x80);
+  return 0;
+}
+
+// Instruction: transfer x register to accumulator
+// a=x
+// flagsout: N,Z
+uint8_t Cpu::TXA() {
+  a = x;
+  SetFlag(N, a & 0x80);
+  SetFlag(Z, a == 0x00);
+  return 0;
+}
+
+// Instruction: transfer x register to stack ptr
+// stkp=x
+uint8_t Cpu::TXS() {
+  stkp = x;
+  return 0;
+}
+// Instruction: transfer Y register to accumulator
+// Function:    A = Y
+// Flags Out:   N, Z
+uint8_t Cpu::TYA() {
+  a = y;
+  SetFlag(Z, a == 0x00);
+  SetFlag(N, a & 0x80);
+  return 0;
+}
+
+// This function captures illegal opcodes
+uint8_t Cpu::XXX() { return 0; }
