@@ -7,4 +7,9 @@ add_executable(Nes main.cpp
         Cpu.cpp
         Cpu.h
         Bus.cpp
-        Bus.h)
+        Bus.h
+        Cartridge.h
+        Cartridge.cpp
+        Ppu.h
+        Ppu.cpp
+)
