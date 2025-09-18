@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NES Cartridge Architecture</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      line-height: 1.6;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+      color: #e0e0e0;
+      min-height: 100vh;
+    }
+
+    .container {
+      background: rgba(255, 255, 255, 0.05);
+      padding: 30px;
+      border-radius: 15px;
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    h1 {
+      text-align: center;
+      color: #ff6b6b;
+      font-size: 2.5em;
+      margin-bottom: 30px;
+      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+    }
+
+    h2 {
+      color: #4ecdc4;
+      border-left: 4px solid #4ecdc4;
+      padding-left: 15px;
+      margin-top: 40px;
+      font-size: 1.5em;
+    }
+
+    h3 {
+      color: #ffe66d;
+      margin-top: 25px;
+    }
+
+    .memory-diagram {
+      background: rgba(0, 0, 0, 0.3);
+      border-radius: 10px;
+      padding: 20px;
+      margin: 20px 0;
+      font-family: 'Courier New', monospace;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .memory-block {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px;
+      margin: 2px 0;
+      border-radius: 5px;
+      border-left: 4px solid;
+    }
+
+    .prg-rom {
+      border-left-color: #ff6b6b;
+      background: rgba(255, 107, 107, 0.1);
+    }
+
+    .chr-rom {
+      border-left-color: #4ecdc4;
+      background: rgba(78, 205, 196, 0.1);
+    }
+
+    .ram {
+      border-left-color: #ffe66d;
+      background: rgba(255, 230, 109, 0.1);
+    }
+
+    .ppu-regs {
+      border-left-color: #a8e6cf;
+      background: rgba(168, 230, 207, 0.1);
+    }
+
+    .empty {
+      border-left-color: #666;
+      background: rgba(102, 102, 102, 0.1);
+    }
+
+    .architecture-diagram {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 30px;
+      margin: 30px 0;
+    }
+
+    .component-box {
+      background: rgba(255, 255, 255, 0.05);
+      padding: 20px;
+      border-radius: 10px;
+      border: 2px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .cpu-box {
+      border-color: #ff6b6b;
+    }
+
+    .ppu-box {
+      border-color: #4ecdc4;
+    }
+
+    .flow-arrow {
+      text-align: center;
+      font-size: 2em;
+      color: #ffe66d;
+      margin: 10px 0;
+    }
+
+    .mapper-examples {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 20px;
+      margin: 20px 0;
+    }
+
+    .mapper-card {
+      background: rgba(255, 255, 255, 0.05);
+      padding: 15px;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .highlight {
+      background: rgba(255, 230, 109, 0.2);
+      padding: 15px;
+      border-radius: 8px;
+      border-left: 4px solid #ffe66d;
+      margin: 15px 0;
+    }
+
+    code {
+      background: rgba(0, 0, 0, 0.3);
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-family: 'Courier New', monospace;
+      color: #4ecdc4;
+    }
+
+    .interaction-flow {
+      background: rgba(0, 0, 0, 0.2);
+      padding: 20px;
+      border-radius: 10px;
+      margin: 20px 0;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <h1>🎮 NES Cartridge Architecture</h1>
+
+    <h2>Overview: The NES Memory Challenge</h2>
+    <p>The NES had a fundamental problem: <strong>the 6502 CPU could only address 64KB of memory</strong>, but games
+      needed much more space for code and graphics. Nintendo's solution was ingenious - they put
+      <strong>mappers</strong> on cartridges to extend memory through bank switching.</p>
+
+    <div class="highlight">
+      <strong>Key Concept:</strong> The NES has <strong>two separate processors</strong> with <strong>two separate
+        memory systems</strong>:
+      <ul>
+        <li><strong>CPU</strong> - handles game logic, accesses PRG ROM/RAM</li>
+        <li><strong>PPU</strong> - handles graphics, accesses CHR ROM/RAM</li>
+      </ul>
+    </div>
+
+    <h2>Memory Layout</h2>
+
+    <div class="architecture-diagram">
+      <div class="component-box cpu-box">
+        <h3>CPU Memory Map (64KB)</h3>
+        <div class="memory-diagram">
+          <div class="memory-block empty">
+            <span>$FFFF</span><span>Interrupt Vectors</span>
+          </div>
+          <div class="memory-block prg-rom">
+            <span>$C000-$FFFF</span><span>PRG ROM (Upper 16KB)</span>
+          </div>
+          <div class="memory-block prg-rom">
+            <span>$8000-$BFFF</span><span>PRG ROM (Lower 16KB)</span>
+          </div>
+          <div class="memory-block ram">
+            <span>$6000-$7FFF</span><span>Cartridge RAM (Optional)</span>
+          </div>
+          <div class="memory-block empty">
+            <span>$4020-$5FFF</span><span>Expansion ROM</span>
+          </div>
+          <div class="memory-block ppu-regs">
+            <span>$4000-$401F</span><span>APU/Input Registers</span>
+          </div>
+          <div class="memory-block ppu-regs">
+            <span>$2000-$3FFF</span><span>PPU Registers (Mirrored)</span>
+          </div>
+          <div class="memory-block ram">
+            <span>$0800-$1FFF</span><span>RAM Mirrors</span>
+          </div>
+          <div class="memory-block ram">
+            <span>$0000-$07FF</span><span>Internal RAM (2KB)</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="component-box ppu-box">
+        <h3>PPU Memory Map (16KB)</h3>
+        <div class="memory-diagram">
+          <div class="memory-block empty">
+            <span>$4000-$FFFF</span><span>Mirrors</span>
+          </div>
+          <div class="memory-block ram">
+            <span>$3F20-$3FFF</span><span>Palette Mirrors</span>
+          </div>
+          <div class="memory-block ram">
+            <span>$3F10-$3F1F</span><span>Sprite Palette</span>
+          </div>
+          <div class="memory-block ram">
+            <span>$3F00-$3F0F</span><span>Background Palette</span>
+          </div>
+          <div class="memory-block ram">
+            <span>$3000-$3EFF</span><span>Name Table Mirrors</span>
+          </div>
+          <div class="memory-block ram">
+            <span>$2000-$2FFF</span><span>Name Tables (4 screens)</span>
+          </div>
+          <div class="memory-block chr-rom">
+            <span>$1000-$1FFF</span><span>Pattern Table 1 (CHR)</span>
+          </div>
+          <div class="memory-block chr-rom">
+            <span>$0000-$0FFF</span><span>Pattern Table 0 (CHR)</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <h2>Cartridge Components</h2>
+
+    <h3>PRG ROM (Program ROM)</h3>
+    <ul>
+      <li><strong>Connected to CPU</strong> - Contains game code and data</li>
+      <li><strong>Mapped to $8000-$FFFF</strong> in CPU memory space</li>
+      <li><strong>32KB visible at once</strong> (but cartridge can have much more)</li>
+      <li><strong>Bank switched by mappers</strong> for larger games</li>
+    </ul>
+
+    <h3>CHR ROM/RAM (Character ROM/RAM)</h3>
+    <ul>
+      <li><strong>Connected to PPU</strong> - Contains graphics tile data</li>
+      <li><strong>Mapped to $0000-$1FFF</strong> in PPU memory space</li>
+      <li><strong>8KB visible at once</strong> (pattern tables)</li>
+      <li><strong>CHR ROM:</strong> Fixed graphics data</li>
+      <li><strong>CHR RAM:</strong> CPU can upload graphics at runtime</li>
+    </ul>
+
+    <h2>The Role of Mappers</h2>
+
+    <p>Mappers are <strong>hardware circuits on the cartridge</strong> that extend memory capabilities through bank
+      switching. They act as "memory magicians" that trick the CPU/PPU into thinking they can access more memory than
+      physically possible.</p>
+
+    <div class="mapper-examples">
+      <div class="mapper-card">
+        <h4>NROM (Mapper 0)</h4>
+        <p><strong>No mapper</strong> - simplest case</p>
+        <ul>
+          <li>32KB PRG ROM max</li>
+          <li>8KB CHR ROM max</li>
+          <li>No bank switching</li>
+          <li>Example: Super Mario Bros.</li>
+        </ul>
+      </div>
+
+      <div class="mapper-card">
+        <h4>UxROM (Mapper 2)</h4>
+        <p><strong>PRG bank switching</strong></p>
+        <ul>
+          <li>Up to 256KB PRG ROM</li>
+          <li>CHR RAM only</li>
+          <li>Switchable lower bank</li>
+          <li>Example: Mega Man, Castlevania</li>
+        </ul>
+      </div>
+
+      <div class="mapper-card">
+        <h4>MMC1 (Mapper 1)</h4>
+        <p><strong>Advanced switching</strong></p>
+        <ul>
+          <li>Up to 512KB PRG ROM</li>
+          <li>Up to 128KB CHR ROM</li>
+          <li>Fine-grained banking</li>
+          <li>Example: Legend of Zelda</li>
+        </ul>
+      </div>
+
+      <div class="mapper-card">
+        <h4>MMC3 (Mapper 4)</h4>
+        <p><strong>Most advanced</strong></p>
+        <ul>
+          <li>Up to 512KB PRG ROM</li>
+          <li>Up to 256KB CHR ROM</li>
+          <li>Scanline counter</li>
+          <li>Example: Super Mario Bros. 3</li>
+        </ul>
+      </div>
+    </div>
+
+    <h2>CPU and PPU Interaction with Cartridge</h2>
+
+    <div class="interaction-flow">
+      <h3>How CPU Accesses Cartridge:</h3>
+      <ol>
+        <li><strong>Direct Connection:</strong> CPU address/data lines connect to PRG ROM</li>
+        <li><strong>Memory Mapped:</strong> PRG ROM appears at $8000-$FFFF</li>
+        <li><strong>Read Only:</strong> CPU can only read from PRG ROM</li>
+        <li><strong>Bank Switching:</strong> Mapper switches which PRG bank is visible</li>
+      </ol>
+
+      <div class="flow-arrow">↕️</div>
+
+      <h3>How PPU Accesses Cartridge:</h3>
+      <ol>
+        <li><strong>Separate Bus:</strong> PPU has its own address/data lines to CHR ROM</li>
+        <li><strong>Pattern Tables:</strong> CHR ROM provides tile graphics at $0000-$1FFF</li>
+        <li><strong>No Direct CPU Access:</strong> CPU cannot directly read CHR ROM</li>
+        <li><strong>Indirect Access:</strong> CPU can read CHR data via PPU registers ($2006/$2007)</li>
+      </ol>
+    </div>
+
+    <h2>Memory Banking Examples</h2>
+
+    <h3>Simple Game (32KB total):</h3>
+    <div class="memory-diagram">
+      <div class="memory-block prg-rom">
+        <span>CPU sees:</span><span>All 32KB PRG ROM at $8000-$FFFF</span>
+      </div>
+      <div class="memory-block chr-rom">
+        <span>PPU sees:</span><span>All 8KB CHR ROM at $0000-$1FFF</span>
+      </div>
+    </div>
+
+    <h3>Complex Game (512KB PRG + 256KB CHR):</h3>
+    <div class="memory-diagram">
+      <div class="memory-block prg-rom">
+        <span>CPU sees:</span><span>32KB window into 512KB PRG ROM</span>
+      </div>
+      <div class="memory-block">
+        <span>Mapper:</span><span>Switches which 32KB chunk is visible</span>
+      </div>
+      <div class="memory-block chr-rom">
+        <span>PPU sees:</span><span>8KB window into 256KB CHR ROM</span>
+      </div>
+      <div class="memory-block">
+        <span>Mapper:</span><span>Switches which 8KB chunk is visible</span>
+      </div>
+    </div>
+
+    <h2>CPU-PPU Communication</h2>
+
+    <p>Since CPU and PPU have separate memory systems, they communicate through <strong>PPU registers</strong> mapped in
+      CPU memory space:</p>
+
+    <div class="memory-diagram">
+      <div class="memory-block ppu-regs">
+        <span>$2000</span><span>PPUCTRL - PPU control</span>
+      </div>
+      <div class="memory-block ppu-regs">
+        <span>$2001</span><span>PPUMASK - PPU mask</span>
+      </div>
+      <div class="memory-block ppu-regs">
+        <span>$2002</span><span>PPUSTATUS - PPU status (read only)</span>
+      </div>
+      <div class="memory-block ppu-regs">
+        <span>$2003</span><span>OAMADDR - OAM address</span>
+      </div>
+      <div class="memory-block ppu-regs">
+        <span>$2004</span><span>OAMDATA - OAM data</span>
+      </div>
+      <div class="memory-block ppu-regs">
+        <span>$2005</span><span>PPUSCROLL - PPU scroll</span>
+      </div>
+      <div class="memory-block ppu-regs">
+        <span>$2006</span><span>PPUADDR - PPU address</span>
+      </div>
+      <div class="memory-block ppu-regs">
+        <span>$2007</span><span>PPUDATA - PPU data</span>
+      </div>
+    </div>
+
+    <div class="highlight">
+      <h3>Key Interactions:</h3>
+      <ul>
+        <li><strong>Graphics Upload:</strong> CPU writes tile data to CHR RAM via $2006/$2007</li>
+        <li><strong>Sprite Control:</strong> CPU manages 64 sprites via OAM registers</li>
+        <li><strong>Scrolling:</strong> CPU controls screen position via $2005</li>
+        <li><strong>Bank Switching:</strong> CPU writes to mapper registers to change visible banks</li>
+        <li><strong>Timing:</strong> PPU signals CPU via NMI interrupt during V-blank</li>
+      </ul>
+    </div>
+
+    <h2>Why This Architecture?</h2>
+
+    <div class="interaction-flow">
+      <h3>Advantages:</h3>
+      <ul>
+        <li><strong>Cost Effective:</strong> Cheaper than large unified RAM</li>
+        <li><strong>Expandable:</strong> Mappers allow virtually unlimited game size</li>
+        <li><strong>Optimized:</strong> Separate buses prevent CPU/PPU conflicts</li>
+        <li><strong>Flexible:</strong> Different mappers solve different game requirements</li>
+      </ul>
+
+      <h3>Challenges:</h3>
+      <ul>
+        <li><strong>Complex Programming:</strong> Managing banks requires careful planning</li>
+        <li><strong>Timing Critical:</strong> Bank switches must happen at safe times</li>
+        <li><strong>Limited Windows:</strong> Only small portions visible at once</li>
+        <li><strong>Mapper Dependency:</strong> Each mapper works differently</li>
+      </ul>
+    </div>
+
+    <h2>In Your Emulator</h2>
+
+    <p>When implementing NES emulation, you need to:</p>
+    <ol>
+      <li><strong>Parse ROM files</strong> to identify mapper type and extract PRG/CHR data</li>
+      <li><strong>Implement mapper logic</strong> for bank switching</li>
+      <li><strong>Separate CPU and PPU memory systems</strong></li>
+      <li><strong>Handle PPU register access</strong> for CPU-PPU communication</li>
+      <li><strong>Manage timing</strong> between CPU and PPU operations</li>
+    </ol>
+
+    <div class="highlight">
+      <strong>Remember:</strong> The mapper is the key to understanding NES cartridges. It's not just storage - it's an
+      active component that extends the system's capabilities far beyond the original 64KB limitation!
+    </div>
+  </div>
+</body>
+
+</html>
