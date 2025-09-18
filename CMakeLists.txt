@@ -12,4 +12,10 @@ add_executable(Nes main.cpp
         Cartridge.cpp
         Ppu.h
         Ppu.cpp
+        olcNes_Video2_2C02.cpp
+        olcPixelGameEngine.h
+        Mapper.h
+        Mapper.cpp
+        Mapper_00.h
+        Mapper_00.cpp
 )

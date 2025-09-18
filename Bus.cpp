@@ -3,8 +3,6 @@
 //
 
 #include "Bus.h"
-#include <cstdint>
-#include <memory>
 #include "Cartridge.h"
 
 Bus::Bus() {
@@ -22,9 +20,7 @@ void Bus::write(uint16_t address, uint8_t data) {
     // the propagation of the bus transaction if it requires.
     // This allows the cartridge to map any address to some
     // other data, including the facility to divert transactions
-    // with other physical devices. The NES does not do this
-    // but I figured it might be quite a flexible way of adding
-    // "custom" hardware to the NES in the future!
+    // with other physical devices.
   } else if (address >= 0x0000 && address <= 0x1FFF) {
     // System RAM Address Range. The range covers 8KB, though
     // there is only 2KB available. That 2KB is "mirrored"

@@ -5,6 +5,8 @@
 #include <cstdint>
 #include <memory>
 #include "Cartridge.h"
+#include "olcPixelGameEngine.h"
+
 class Ppu {
 public:
   Ppu();
@@ -20,6 +22,12 @@ public:
   void    clock();
   void    ConnectCartridge(const std::shared_ptr<Cartridge> &cart);
 
+  olc::Sprite &GetScreen();
+  olc::Sprite &GetNameTable(uint8_t i);
+  olc::Sprite &GetPatternTable(uint8_t i);
+
+  bool frame_complete = false;
+
   // ppu has its own bus which contains the Pattern memory, NameTable
 private:
   std::shared_ptr<Cartridge> cart;
@@ -32,7 +40,14 @@ private:
   uint8_t tblePattern[2][4098];
   // describes which colors should be displayed on the screen
   // 0x3F00 to 0x3FFFF
-  uint8_t tblPalette[32];
+  uint8_t      tblPalette[32];
+  olc::Pixel   palScreen[0x40];
+  olc::Sprite *sprScreen;
+  olc::Sprite *sprNameTable[2];
+  olc::Sprite *sprPatternTable[2];
+
+  int16_t scanline = 0;
+  int16_t cycle    = 0;
 };
 
 #endif // !NES_PPU_H
