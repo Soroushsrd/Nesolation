@@ -121,7 +121,7 @@ Cpu::Cpu() {
   };
 }
 
-Cpu::~Cpu() {}
+Cpu::~Cpu() = default;
 
 uint8_t Cpu::read(uint16_t a) { return bus->read(a, false); }
 
@@ -218,6 +218,7 @@ uint8_t Cpu::ZPY() {
   address_abs = read(pc) + y;
   pc++;
   address_abs &= 0x00FF;
+  return 0;
 }
 
 // Address Mode Relative
@@ -248,6 +249,7 @@ uint8_t Cpu::ABS() {
   uint16_t hi = read(pc);
   pc++;
   address_abs = (hi << 8) | lo;
+  return 0;
 }
 
 // Address Mode: Absolute with X offset
@@ -269,6 +271,25 @@ uint8_t Cpu::ABX() {
   }
 }
 
+uint8_t Cpu::BVC() {
+  if (GetFlag(V) == 0) {
+    cycles++;
+    address_abs = pc + address_rel;
+    if ((address_abs & 0xFF00) != (pc & 0xFF00)) {
+      cycles++;
+    }
+    pc = address_abs;
+  }
+  return 0;
+}
+
+uint8_t Cpu::TAY() {
+  y = a;
+  SetFlag(Z, y == 0x00);
+  SetFlag(N, y & 0x80);
+  return 0;
+}
+
 // Addressing Mode: Absolute with Y offset
 uint8_t Cpu::ABY() {
   uint16_t lo = read(pc);
@@ -284,6 +305,7 @@ uint8_t Cpu::ABY() {
   } else {
     return 0;
   }
+  return 0;
 }
 
 // Addressing Mode: Indirect
@@ -1180,3 +1202,201 @@ uint8_t Cpu::TYA() {
 
 // This function captures illegal opcodes
 uint8_t Cpu::XXX() { return 0; }
+
+// This is the disassembly function. Its workings are not required for emulation.
+// It is merely a convenience function to turn the binary instruction code into
+// human readable form. Its included as part of the emulator because it can take
+// advantage of many of the CPUs internal operations to do this.
+std::map<uint16_t, std::string> Cpu::disassemble(uint16_t nStart, uint16_t nStop) {
+  uint32_t                        addr  = nStart;
+  uint8_t                         value = 0x00, lo = 0x00, hi = 0x00;
+  std::map<uint16_t, std::string> mapLines;
+  uint16_t                        line_addr = 0;
+
+  // A convenient utility to convert variables into
+  // hex strings because "modern C++"'s method with
+  // streams is atrocious
+  auto hex = [](uint32_t n, uint8_t d) {
+    std::string s(d, '0');
+    for (int i = d - 1; i >= 0; i--, n >>= 4)
+      s[i]     = "0123456789ABCDEF"[n & 0xF];
+    return s;
+  };
+
+  // Starting at the specified address we read an instruction
+  // byte, which in turn yields information from the lookup table
+  // as to how many additional bytes we need to read and what the
+  // addressing mode is. I need this info to assemble human readable
+  // syntax, which is different depending upon the addressing mode
+
+  // As the instruction is decoded, a std::string is assembled
+  // with the readable output
+  while (addr <= (uint32_t) nStop) {
+    line_addr = addr;
+
+    // Prefix line with instruction address
+    std::string sInst = "$" + hex(addr, 4) + ": ";
+
+    // Read instruction, and get its readable name
+    uint8_t opcode = bus->read(addr, true);
+    addr++;
+    sInst += lookup[opcode].name + " ";
+
+    // Get oprands from desired locations, and form the
+    // instruction based upon its addressing mode. These
+    // routines mimmick the actual fetch routine of the
+    // 6502 in order to get accurate data as part of the
+    // instruction
+    if (lookup[opcode].addrmode == &Cpu::IMP) {
+      sInst += " {IMP}";
+    } else if (lookup[opcode].addrmode == &Cpu::IMM) {
+      value = bus->read(addr, true);
+      addr++;
+      sInst += "#$" + hex(value, 2) + " {IMM}";
+    } else if (lookup[opcode].addrmode == &Cpu::ZP0) {
+      lo = bus->read(addr, true);
+      addr++;
+      hi = 0x00;
+      sInst += "$" + hex(lo, 2) + " {ZP0}";
+    } else if (lookup[opcode].addrmode == &Cpu::ZPX) {
+      lo = bus->read(addr, true);
+      addr++;
+      hi = 0x00;
+      sInst += "$" + hex(lo, 2) + ", X {ZPX}";
+    } else if (lookup[opcode].addrmode == &Cpu::ZPY) {
+      lo = bus->read(addr, true);
+      addr++;
+      hi = 0x00;
+      sInst += "$" + hex(lo, 2) + ", Y {ZPY}";
+    } else if (lookup[opcode].addrmode == &Cpu::IZX) {
+      lo = bus->read(addr, true);
+      addr++;
+      hi = 0x00;
+      sInst += "($" + hex(lo, 2) + ", X) {IZX}";
+    } else if (lookup[opcode].addrmode == &Cpu::IZY) {
+      lo = bus->read(addr, true);
+      addr++;
+      hi = 0x00;
+      sInst += "($" + hex(lo, 2) + "), Y {IZY}";
+    } else if (lookup[opcode].addrmode == &Cpu::ABS) {
+      lo = bus->read(addr, true);
+      addr++;
+      hi = bus->read(addr, true);
+      addr++;
+      sInst += "$" + hex((uint16_t) (hi << 8) | lo, 4) + " {ABS}";
+    } else if (lookup[opcode].addrmode == &Cpu::ABX) {
+      lo = bus->read(addr, true);
+      addr++;
+      hi = bus->read(addr, true);
+      addr++;
+      sInst += "$" + hex((uint16_t) (hi << 8) | lo, 4) + ", X {ABX}";
+    } else if (lookup[opcode].addrmode == &Cpu::ABY) {
+      lo = bus->read(addr, true);
+      addr++;
+      hi = bus->read(addr, true);
+      addr++;
+      sInst += "$" + hex((uint16_t) (hi << 8) | lo, 4) + ", Y {ABY}";
+    } else if (lookup[opcode].addrmode == &Cpu::IND) {
+      lo = bus->read(addr, true);
+      addr++;
+      hi = bus->read(addr, true);
+      addr++;
+      sInst += "($" + hex((uint16_t) (hi << 8) | lo, 4) + ") {IND}";
+    } else if (lookup[opcode].addrmode == &Cpu::REL) {
+      value = bus->read(addr, true);
+      addr++;
+      sInst += "$" + hex(value, 2) + " [$" + hex(addr + (int8_t) value, 4) + "] {REL}";
+    }
+
+    // Add the formed string to a std::map, using the instruction's
+    // address as the key. This makes it convenient to look for later
+    // as the instructions are variable in length, so a straight up
+    // incremental index is not sufficient.
+    mapLines[line_addr] = sInst;
+  }
+
+  return mapLines;
+}
+
+bool Cpu::complete() const { return cycles == 0; }
+
+// forces the cpu into a known state, regersters are set to 0x00, status register is cleared except
+// for unused bit which remains at 1.
+// an absolute address is read from location 0xFFFC which contains a second address that the
+// program counter is set to. this allows us to jump to a known programmable location to start
+// executing from.
+void Cpu::reset() {
+  address_abs = 0xFFFC;
+  uint16_t lo = read(address_abs + 0);
+  uint16_t hi = read(address_abs + 1);
+
+  pc = (hi << 8) | lo;
+
+  a      = 0;
+  x      = 0;
+  y      = 0;
+  stkp   = 0xFD;
+  status = 0x00 | U;
+
+  address_rel = 0x0000;
+  address_abs = 0x0000;
+  fetched     = 0x00;
+
+  cycles = 0;
+}
+
+// Interrupt requests are a complex operation and only happen if the
+// "disable interrupt" flag is 0. IRQs can happen at any time, but
+// you dont want them to be destructive to the operation of the running
+// program. Therefore the current instruction is allowed to finish
+// (which I facilitate by doing the whole thing when cycles == 0) and
+// then the current program counter is stored on the stack. Then the
+// current status register is stored on the stack. When the routine
+// that services the interrupt has finished, the status register
+// and program counter can be restored to how they where before it
+// occurred. This is impemented by the "RTI" instruction. Once the IRQ
+// has happened, in a similar way to a reset, a programmable address
+// is read form hard coded location 0xFFFE, which is subsequently
+// set to the program counter.
+void Cpu::irq() {
+  if (GetFlag(I) == 0) {
+    // push the program counter to the stack. takes 2 pushes since its 16 bit
+    write(0x0100 + stkp, (pc >> 8) & 0x00FF);
+    stkp--;
+    write(0x0100 + stkp, pc & 0x00FF);
+
+    // pushing register to the stack
+    SetFlag(B, 0);
+    SetFlag(U, 1);
+    SetFlag(I, 1);
+    write(0x0100 + stkp, status);
+    stkp--;
+
+    // reading new program counter location from fixed address
+    address_abs = 0xFFFE;
+    uint16_t lo = read(address_abs + 0);
+    uint16_t hi = read(address_abs + 1);
+    pc          = (hi << 8) | lo;
+    cycles      = 7; // for the irq to finish
+  }
+}
+
+// a non-maskable interrupt cannot be ignored! it behaves exactly the same way as a regular
+// IRQ but reads the new program counter address from location 0xFFFA
+void Cpu::nmi() {
+  write(0x0100 + stkp, (pc >> 8) & 0x00FF);
+  stkp--;
+  write(0x0100 + stkp, pc & 0x00FF);
+  stkp--;
+  SetFlag(B, 0);
+  SetFlag(U, 1);
+  SetFlag(I, 1);
+  write(0x0100 + stkp, status);
+  stkp--;
+
+  address_abs = 0xFFFA;
+  uint16_t lo = read(address_abs + 0);
+  uint16_t hi = read(address_abs + 1);
+  pc          = (hi << 8) | lo;
+  cycles      = 8;
+}

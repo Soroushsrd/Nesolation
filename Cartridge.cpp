@@ -74,11 +74,14 @@ Cartridge::Cartridge(const std::string &fileName) {
   }
 }
 
+Cartridge::~Cartridge() = default;
+
 bool Cartridge::ImageValid() { return bImageValid; }
 // WARNING:
 bool Cartridge::cpuRead(uint16_t addr, uint8_t &data) {
 
   uint32_t mapped_addr = 0;
+  // if mapper says that info has to come from the cartridge:
   if (pMapper->cpuMapRead(addr, mapped_addr)) {
     data = vPRGMemory[mapped_addr];
     return true;
@@ -96,6 +99,7 @@ bool Cartridge::cpuWrite(uint16_t addr, uint8_t data) {
 
 bool Cartridge::ppuRead(uint16_t addr, uint8_t &data) {
   uint32_t mapped_addr = 0;
+  // ppu read and writes care about the character memory instead of program memory
   if (pMapper->ppuMapRead(addr, mapped_addr)) {
     data = vCHRMemory[mapped_addr];
     return true;

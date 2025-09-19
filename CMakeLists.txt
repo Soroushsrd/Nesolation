@@ -3,7 +3,7 @@ project(Nes)
 
 set(CMAKE_CXX_STANDARD 20)
 
-add_executable(Nes main.cpp
+add_executable(Nes
         Cpu.cpp
         Cpu.h
         Bus.cpp
@@ -19,3 +19,10 @@ add_executable(Nes main.cpp
         Mapper_00.h
         Mapper_00.cpp
 )
+
+
+target_link_libraries(Nes
+        X11
+        GL
+        png
+        pthread)

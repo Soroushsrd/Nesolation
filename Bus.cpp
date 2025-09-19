@@ -12,7 +12,8 @@ Bus::Bus() {
   cpu.ConnectBus(this);
 }
 
-Bus::~Bus() {}
+Bus::~Bus() {
+}
 
 void Bus::write(uint16_t address, uint8_t data) {
   if (cart->cpuWrite(address, data)) {
@@ -46,7 +47,7 @@ uint8_t Bus::read(uint16_t address, bool bReadOnly) {
   } else if (address >= 0x0000 && address <= 0x1FFF) {
     // implementing the mirroring. we use &0x1FFF which is 2kb range mask to get the
     // address % 2kb result which will always be less than 2kb and a valid address
-    data = ram[address & 0x1FFF];
+    data = ram[address & 0x07FF];
     // for ppu addresses
   } else if (address >= 0x2000 && address <= 0x3FFF) {
     data = ppu.cpuRead(address & 0x0007, bReadOnly);

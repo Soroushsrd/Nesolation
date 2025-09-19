@@ -81,7 +81,7 @@ private:
   std::string hex(uint32_t n, uint8_t d) {
     std::string s(d, '0');
     for (int i = d - 1; i >= 0; i--, n >>= 4)
-      s[i] = "0123456789ABCDEF"[n & 0xF];
+      s[i]     = "0123456789ABCDEF"[n & 0xF];
     return s;
   };
 
@@ -216,7 +216,7 @@ private:
 
 int main() {
   Demo_olc2C02 demo;
-  demo.Construct(780, 480, 2, 2);
+  demo.Construct(779, 480, 2, 2);
   demo.Start();
-  return 0;
+  return -1;
 }

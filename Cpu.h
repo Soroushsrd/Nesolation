@@ -5,6 +5,7 @@
 #ifndef NES_CPU_H
 #define NES_CPU_H
 #include <cstdint>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -94,10 +95,10 @@ public:
   uint8_t  cycles      = 0x00;   // cycles left for the duration of current instruction
 
   struct INSTRUCTION {
-    std::string name;
+    std::string    name;
     uint8_t (Cpu::*operate)()  = nullptr;
     uint8_t (Cpu::*addrmode)() = nullptr;
-    uint8_t cycles             = 0;
+    uint8_t        cycles      = 0;
   };
 
   std::vector<INSTRUCTION> lookup;
@@ -105,9 +106,12 @@ public:
   Cpu();
   ~Cpu();
 
-  void    ConnectBus(Bus *n) { bus = n; }
-  uint8_t GetFlag(FLAGS6502 f) const;
-  void    SetFlag(FLAGS6502 f, bool v);
+  void ConnectBus(Bus *n) { bus = n; }
+
+  std::map<uint16_t, std::string> disassemble(uint16_t nStart, uint16_t nStop);
+  bool                            complete() const;
+  uint8_t                         GetFlag(FLAGS6502 f) const;
+  void                            SetFlag(FLAGS6502 f, bool v);
 
   // External event functions. In hardware these represent pins that are asserted
   // to produce a change in state.
